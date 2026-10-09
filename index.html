@@ -20,6 +20,7 @@ hr{border:0;height:10px;background:var(--red);border-radius:6px;margin:8px 12px 
 .del{display:none;position:absolute;top:4px;right:4px;background:var(--red);color:#fff;border:0;border-radius:50%;width:26px;height:26px;font-size:14px}
 .own .del,body.mod .del{display:block}
 .bn{display:none;position:absolute;top:4px;right:36px;background:#400;color:#fff;border:0;border-radius:50%;width:26px;height:26px;font-size:13px}body.mod .card:not(.own) .bn{display:block}
+.pb{display:none;position:absolute;top:4px;right:68px;background:#fff8;border:2px solid var(--red);border-radius:50%;width:26px;height:26px;font-size:12px;padding:0}body.mod .pb{display:block}.card.pin{outline:3px dashed var(--red)}
 #plist{font:13px system-ui,sans-serif;max-height:62vh;overflow:auto;text-align:left;overflow-wrap:anywhere}#plist h3{margin:10px 0 4px}.row{padding:5px 0;border-bottom:1px solid #b8302d55}.row .btn{font-size:13px;padding:2px 8px;margin-left:6px}
 #ban{z-index:99;text-align:center;font-size:22px;line-height:1.4}
 #fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);width:68px;height:68px;border-radius:50%;background:var(--red);color:var(--bg);border:0;font-size:44px;line-height:1;cursor:pointer}
@@ -45,7 +46,7 @@ textarea{height:130px;resize:none}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SB_URL='https://whjnhbwsflusfhrtrrfa.supabase.co',SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indoam5oYndzZmx1c2ZocnRycmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0MjYwMDgsImV4cCI6MjEwNzAwMjAwOH0.R6VTZldzHKqU-EWlUcDjxZ7bEq1_LW9NM72nITWYiYs';
-const $=i=>document.getElementById(i),PG=30;let sb;
+const $=i=>document.getElementById(i),PG=12;let sb;
 try{sb=supabase.createClient(SB_URL,SB_KEY)}catch(e){setTimeout(()=>alert('Não conectou ao Supabase. Confira a URL e a chave no index.html.\n'+e.message),300)}
 let uid,me,modUntil=0,pg=0,avData=null,imData=null;
 const show=i=>$(i).classList.add('show'),hide=i=>$(i).classList.remove('show');
@@ -53,30 +54,42 @@ document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>hide(b.dataset.x)
 function shrink(f,max,q){return new Promise((ok,no)=>{const im=new Image(),u=URL.createObjectURL(f);im.onload=()=>{const s=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',q))};im.onerror=no;im.src=u})}
 const okImg=s=>typeof s=='string'&&s.startsWith('data:image/');
 function pick(inp,img,max,q,set){inp.onchange=async()=>{if(!inp.files[0])return;try{const d=await shrink(inp.files[0],max,q);set(d);img.src=d;img.style.display='block'}catch(e){}}}
-pick($('fav'),$('pav'),128,.8,d=>avData=d);pick($('fim'),$('pimg'),900,.7,d=>imData=d);
+pick($('fav'),$('pav'),128,.8,d=>avData=d);pick($('fim'),$('pimg'),800,.65,d=>imData=d);
 async function init(){
  let{data:{session}}=await sb.auth.getSession();
  if(!session){const r=await sb.auth.signInAnonymously();if(r.error){alert('Erro: '+r.error.message);return}session=r.data.session}
  uid=session.user.id;{const{data:bn}=await sb.rpc('am_i_banned');if(bn){show('ban');return}sb.rpc('register_visit')}
  const{data}=await sb.from('profiles').select('*').eq('id',uid).maybeSingle();
- me=data;if(!me)show('rec');await modCheck();load(true);setInterval(()=>load(true),10000);setInterval(modTick,20000)}
+ me=data;if(!me)show('rec');await modCheck();try{const c=JSON.parse(localStorage.getItem('feed4y2')||'{}');pins=c.p||[];posts=c.x||[];if(posts.length||pins.length)draw()}catch(e){posts=[];pins=[]}if(posts.length)poll();else load(true);setInterval(poll,30000);setInterval(modTick,20000)}
 $('ent').onclick=async()=>{const name=$('nm').value.trim();if(name.length<2){$('err').textContent='Nome precisa de 2+ letras';return}
  const{data,error}=await sb.from('profiles').upsert({id:uid,name,avatar:avData}).select().single();
  if(error){$('err').textContent='Erro: '+error.message;return}me=data;hide('rec')};
-function card(p){const d=document.createElement('div');d.className='card'+(p.user_id==uid?' own':'');d.dataset.id=p.id;
+function card(p){const d=document.createElement('div');d.className='card'+(p.user_id==uid?' own':'')+(pins.some(q=>q.id==p.id)?' pin':'');d.dataset.id=p.id;
  const w=document.createElement('div');w.className='who';const a=document.createElement('img');a.className='av';if(okImg(p.profiles?.avatar))a.src=p.profiles.avatar;
- const n=document.createElement('span');n.textContent=(p.profiles?.name||'???')+'#'+String(p.profiles?.tag||0).padStart(4,'0');w.append(a,n);d.append(w);
+ const n=document.createElement('span');n.textContent=(d.classList.contains('pin')?'📌 ':'')+(p.profiles?.name||'???')+'#'+String(p.profiles?.tag||0).padStart(4,'0');w.append(a,n);d.append(w);
  if(p.body){const t=document.createElement('div');t.className='txt';t.textContent=p.body;d.append(t)}
  if(okImg(p.image)){const i=document.createElement('img');i.className='pic';i.src=p.image;d.append(i)}
- const x=document.createElement('button');x.className='del';x.textContent='✕';x.onclick=async()=>{if(!confirm('Apagar post?'))return;const{error}=await sb.from('posts').delete().eq('id',p.id);if(error)alert(error.message);else d.remove()};const bn=document.createElement('button');bn.className='bn';bn.textContent='🚫';bn.onclick=()=>banU(p);d.append(x,bn);return d}
-async function load(reset){if(reset)pg=0;const{data,error}=await sb.from('posts').select('id,user_id,body,image,created_at,profiles(name,tag,avatar)').order('created_at',{ascending:false}).range(pg*PG,pg*PG+PG-1);
- if(error||!data)return;const f=$('feed');if(reset){const frag=document.createDocumentFragment();data.forEach(p=>frag.append(card(p)));f.replaceChildren(frag)}else data.forEach(p=>f.append(card(p)));
- $('more').style.display=data.length==PG?'inline-block':'none'}
+ const x=document.createElement('button');x.className='del';x.textContent='✕';x.onclick=async()=>{if(!confirm('Apagar post?'))return;const{error}=await sb.from('posts').delete().eq('id',p.id);if(error)alert(error.message);else d.remove()};const bn=document.createElement('button');bn.className='bn';bn.textContent='🚫';bn.onclick=()=>banU(p);const pb=document.createElement('button');pb.className='pb';pb.textContent='📌';pb.onclick=()=>pinU(p);d.append(x,bn,pb);return d}
+const SEL='id,user_id,body,image,created_at,pinned,profiles(name,tag,avatar)';let posts=[],pins=[];
+async function getPins(){const{data}=await sb.from('posts').select(SEL).eq('pinned',true).order('id',{ascending:false});if(data)pins=data}
+function draw(){const ps=new Set(pins.map(p=>p.id)),fr=document.createDocumentFragment();pins.concat(posts.filter(p=>!ps.has(p.id))).forEach(p=>fr.append(card(p)));$('feed').replaceChildren(fr);try{localStorage.setItem('feed4y2',JSON.stringify({p:pins,x:posts.slice(0,PG)}))}catch(e){}}
+async function load(reset){if(reset){pg=0;await getPins()}const{data,error}=await sb.from('posts').select(SEL).order('id',{ascending:false}).range(pg*PG,pg*PG+PG-1);
+ if(error||!data)return;posts=reset?data:posts.concat(data.filter(d=>!posts.some(p=>p.id==d.id)));draw();$('more').style.display=data.length==PG?'inline-block':'none'}
+async function poll(){if(document.hidden||!uid)return;if(!posts.length){load(true);return}
+ const{data:pi}=await sb.from('posts').select('id').eq('pinned',true);if(pi&&pi.map(r=>r.id).sort().join()!=pins.map(r=>r.id).sort().join()){load(true);return}
+ const{data:nw}=await sb.from('posts').select(SEL).gt('id',posts[0].id).order('id',{ascending:false}).limit(PG);
+ if(nw&&nw.length>=PG){load(true);return}
+ const{data:ids}=await sb.from('posts').select('id').order('id',{ascending:false}).limit(PG);if(!ids)return;let ch=false;
+ if(nw&&nw.length){posts=nw.concat(posts);ch=true}
+ const have=new Set(ids.map(r=>r.id)),min=ids.length?ids[ids.length-1].id:0,keep=posts.filter(p=>have.has(p.id)||p.id<min);
+ if(keep.length!=posts.length){posts=keep;ch=true}if(ch)draw()}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
+async function pinU(p){const on=!pins.some(q=>q.id==p.id);const{error}=await sb.rpc('pin_post',{pid:p.id,do_pin:on});if(error)alert(error.message);else load(true)}
 $('more').onclick=()=>{pg++;load(false)};
 $('fab').onclick=()=>show('np');
 $('pub').onclick=async()=>{const body=$('tx').value.trim();if(!body&&!imData)return;$('pub').disabled=true;
  const{error}=await sb.from('posts').insert({user_id:uid,body,image:imData});$('pub').disabled=false;if(error){const r=await sb.rpc('am_i_banned');if(r.data){hide('np');show('ban')}else alert(error.message);return}
- $('tx').value='';imData=null;$('pimg').style.display='none';hide('np');load(true)};
+ $('tx').value='';imData=null;$('pimg').style.display='none';hide('np');poll()};
 // MOD
 async function modCheck(){const{data}=await sb.rpc('mod_status');modUntil=data?new Date(data).getTime():0;modTick()}
 function modTick(){const on=Date.now()<modUntil;document.body.classList.toggle('mod',on);$('modb').classList.toggle('on',on);$('modb').textContent=on?'MOD ✓':'MOD'}
