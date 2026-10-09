@@ -19,6 +19,9 @@ hr{border:0;height:10px;background:var(--red);border-radius:6px;margin:8px 12px 
 .card img.pic{width:100%;border:3px solid var(--red);border-radius:4px;display:block}
 .del{display:none;position:absolute;top:4px;right:4px;background:var(--red);color:#fff;border:0;border-radius:50%;width:26px;height:26px;font-size:14px}
 .own .del,body.mod .del{display:block}
+.bn{display:none;position:absolute;top:4px;right:36px;background:#400;color:#fff;border:0;border-radius:50%;width:26px;height:26px;font-size:13px}body.mod .card:not(.own) .bn{display:block}
+#plist{font:13px system-ui,sans-serif;max-height:62vh;overflow:auto;text-align:left;overflow-wrap:anywhere}#plist h3{margin:10px 0 4px}.row{padding:5px 0;border-bottom:1px solid #b8302d55}.row .btn{font-size:13px;padding:2px 8px;margin-left:6px}
+#ban{z-index:99;text-align:center;font-size:22px;line-height:1.4}
 #fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 18px);width:68px;height:68px;border-radius:50%;background:var(--red);color:var(--bg);border:0;font-size:44px;line-height:1;cursor:pointer}
 .ov{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;gap:12px;padding:20px;z-index:5;overflow:auto;align-items:center;justify-content:center}
 .ov.show{display:flex}.ov>*{max-width:420px;width:100%}
@@ -37,6 +40,8 @@ textarea{height:130px;resize:none}
 <div class="ov" id="np"><h1 style="text-align:center">Nova postagem</h1><textarea id="tx" maxlength="2000" placeholder="Escreva algo..."></textarea><label class="fl btn"><img id="pimg" alt="">🖼 Anexar imagem<input type="file" accept="image/*" id="fim"></label><button class="btn on" id="pub">Postar</button><button class="btn" data-x="np">Cancelar</button></div>
 <div class="ov" id="mo"><h1 style="text-align:center">Código MOD</h1><div id="code"><input type="text" maxlength="1"><input type="text" maxlength="1"><input type="text" maxlength="1"><input type="text" maxlength="1"><input type="text" maxlength="1"></div><div id="merr" style="text-align:center;font:14px system-ui"></div><button class="btn" data-x="mo">Fechar</button></div>
 
+<div class="ov" id="pn"><h1 style="text-align:center">Painel MOD</h1><div id="plist"></div><button class="btn" data-x="pn">Fechar</button><button class="btn on" id="pexit">Sair do modo MOD</button></div>
+<div class="ov" id="ban"><div style="font-size:60px">🚫</div>Você foi banido por quebrar as regras, não tente burlar, pois pode ser banido novamente!</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SB_URL='https://whjnhbwsflusfhrtrrfa.supabase.co',SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indoam5oYndzZmx1c2ZocnRycmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0MjYwMDgsImV4cCI6MjEwNzAwMjAwOH0.R6VTZldzHKqU-EWlUcDjxZ7bEq1_LW9NM72nITWYiYs';
@@ -52,7 +57,7 @@ pick($('fav'),$('pav'),128,.8,d=>avData=d);pick($('fim'),$('pimg'),900,.7,d=>imD
 async function init(){
  let{data:{session}}=await sb.auth.getSession();
  if(!session){const r=await sb.auth.signInAnonymously();if(r.error){alert('Erro: '+r.error.message);return}session=r.data.session}
- uid=session.user.id;
+ uid=session.user.id;{const{data:bn}=await sb.rpc('am_i_banned');if(bn){show('ban');return}sb.rpc('register_visit')}
  const{data}=await sb.from('profiles').select('*').eq('id',uid).maybeSingle();
  me=data;if(!me)show('rec');await modCheck();load(true);setInterval(()=>load(true),10000);setInterval(modTick,20000)}
 $('ent').onclick=async()=>{const name=$('nm').value.trim();if(name.length<2){$('err').textContent='Nome precisa de 2+ letras';return}
@@ -63,24 +68,30 @@ function card(p){const d=document.createElement('div');d.className='card'+(p.use
  const n=document.createElement('span');n.textContent=(p.profiles?.name||'???')+'#'+String(p.profiles?.tag||0).padStart(4,'0');w.append(a,n);d.append(w);
  if(p.body){const t=document.createElement('div');t.className='txt';t.textContent=p.body;d.append(t)}
  if(okImg(p.image)){const i=document.createElement('img');i.className='pic';i.src=p.image;d.append(i)}
- const x=document.createElement('button');x.className='del';x.textContent='✕';x.onclick=async()=>{if(!confirm('Apagar post?'))return;const{error}=await sb.from('posts').delete().eq('id',p.id);if(error)alert(error.message);else d.remove()};d.append(x);return d}
+ const x=document.createElement('button');x.className='del';x.textContent='✕';x.onclick=async()=>{if(!confirm('Apagar post?'))return;const{error}=await sb.from('posts').delete().eq('id',p.id);if(error)alert(error.message);else d.remove()};const bn=document.createElement('button');bn.className='bn';bn.textContent='🚫';bn.onclick=()=>banU(p);d.append(x,bn);return d}
 async function load(reset){if(reset)pg=0;const{data,error}=await sb.from('posts').select('id,user_id,body,image,created_at,profiles(name,tag,avatar)').order('created_at',{ascending:false}).range(pg*PG,pg*PG+PG-1);
  if(error||!data)return;const f=$('feed');if(reset){const frag=document.createDocumentFragment();data.forEach(p=>frag.append(card(p)));f.replaceChildren(frag)}else data.forEach(p=>f.append(card(p)));
  $('more').style.display=data.length==PG?'inline-block':'none'}
 $('more').onclick=()=>{pg++;load(false)};
 $('fab').onclick=()=>show('np');
 $('pub').onclick=async()=>{const body=$('tx').value.trim();if(!body&&!imData)return;$('pub').disabled=true;
- const{error}=await sb.from('posts').insert({user_id:uid,body,image:imData});$('pub').disabled=false;if(error){alert(error.message);return}
+ const{error}=await sb.from('posts').insert({user_id:uid,body,image:imData});$('pub').disabled=false;if(error){const r=await sb.rpc('am_i_banned');if(r.data){hide('np');show('ban')}else alert(error.message);return}
  $('tx').value='';imData=null;$('pimg').style.display='none';hide('np');load(true)};
 // MOD
 async function modCheck(){const{data}=await sb.rpc('mod_status');modUntil=data?new Date(data).getTime():0;modTick()}
 function modTick(){const on=Date.now()<modUntil;document.body.classList.toggle('mod',on);$('modb').classList.toggle('on',on);$('modb').textContent=on?'MOD ✓':'MOD'}
 const ci=[...document.querySelectorAll('#code input')];
-$('modb').onclick=()=>{if(Date.now()<modUntil){if(confirm('Sair do modo MOD?')){modUntil=0;sb.rpc('mod_status');modTick()}return}ci.forEach(i=>i.value='');$('merr').textContent='';show('mo');ci[0].focus()};
+$('modb').onclick=()=>{if(Date.now()<modUntil){panel();return}ci.forEach(i=>i.value='');$('merr').textContent='';show('mo');ci[0].focus()};
 ci.forEach((inp,k)=>{inp.oninput=async()=>{inp.value=inp.value.toUpperCase();if(inp.value&&ci[k+1])ci[k+1].focus();
  const code=ci.map(i=>i.value).join('');if(code.length==5){const{data,error}=await sb.rpc('claim_mod',{code});
  if(error){$('merr').textContent='Muitas tentativas. Espere um pouco.';return}
  if(data){await modCheck();hide('mo')}else{$('merr').textContent='Código errado';ci.forEach(i=>i.value='');ci[0].focus()}}};
  inp.onkeydown=e=>{if(e.key=='Backspace'&&!inp.value&&ci[k-1])ci[k-1].focus()}});
+async function banU(p){if(!confirm('Banir este usuário (conta + IP por 7 dias)?'))return;const{error}=await sb.rpc('ban_user',{target:p.user_id,reason:'quebrar as regras',with_ip:true});alert(error?error.message:'Usuário banido.')}
+$('pexit').onclick=async()=>{await sb.rpc('exit_mod');modUntil=0;modTick();hide('pn')};
+async function panel(){show('pn');const L=$('plist');L.textContent='Carregando...';const{data,error}=await sb.rpc('mod_panel');if(error){L.textContent=error.message;return}
+L.replaceChildren();const h3=t=>{const e=document.createElement('h3');e.textContent=t;L.append(e)},row=t=>{const r=document.createElement('div');r.className='row';r.textContent=t;L.append(r);return r};
+h3('Banidos');if(!data.bans.length)row('ninguém');data.bans.forEach(b=>{const r=row((b.name||'?')+'#'+String(b.tag||0).padStart(4,'0'));const u=document.createElement('button');u.className='btn';u.textContent='Desbanir';u.onclick=async()=>{await sb.rpc('unban_user',{target:b.user_id});panel()};r.append(u)});
+h3('Registro de ações');if(!data.log.length)row('nada ainda');data.log.forEach(l=>row(new Date(l.at).toLocaleString('pt-BR')+' · '+(l.mod_name||'?')+' '+l.action+' '+(l.target_name||'?')+(l.excerpt?' — "'+l.excerpt+'"':'')))}
 init();
 </script></body></html>
